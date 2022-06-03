@@ -1,8 +1,11 @@
 package com.nttdata.Semana01.BankAccount.Controller;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -13,11 +16,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.bind.annotation.RestController; 
 import org.springframework.web.server.ResponseStatusException;
 
+import com.nttdata.Semana01.BankAccount.DTO.Bank;
 import com.nttdata.Semana01.BankAccount.DTO.Customer;
+import com.nttdata.Semana01.BankAccount.DTO.CustomerType;
+import com.nttdata.Semana01.BankAccount.DTO.Debt;
 import com.nttdata.Semana01.BankAccount.Entity.BankAccounts;
 import com.nttdata.Semana01.BankAccount.Entity.TypeBankAccounts;
 import com.nttdata.Semana01.BankAccount.Service.BankAccountsService;
@@ -40,47 +45,115 @@ public class BankAccountsController {
 	BankAccountsService bankAccountsService;
 
 	private String codigoValidatorCustomer;
+	
+	private String codigoValidatorDebt;
 
 	private Integer codigoValidatorTypeBankAccounts;
 
 	private String messageBadRequest;
 
-	private WebClient customerServiceClient = WebClient.builder().baseUrl("http://localhost:8081").build();
-
 	private static final String BANK_ACCOUNTS_CONTACT_TO_CUSTOMERSERVICE = "bankAccountsContactToCustomerService";
+
+	// Validar Servicio de Comunicacion con el Servicio de Customer
+
+	@GetMapping(value = "/ObtenerCustomerbyDNI/{dni}")
+	public Mono<Customer> getCustomerByDNI(@PathVariable String dni) throws InterruptedException {
+
+		try {
+
+			Mono<Customer> fluxcustomer = this.bankAccountsService
+					.comunicationWebClientCustomerObtenerCustomerbyDni(dni); 
+
+			long temporizador = (20 * 1000);
+
+			Thread.sleep(temporizador);
+ 
+			return fluxcustomer;
+			 
+		} catch (InterruptedException e) {
+			log.info(e.toString());
+			Thread.currentThread().interrupt();
+			return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
+		}
+	}
 	
+	@GetMapping(value = "/ObtenerDebtbyDNI/{dni}")
+	public Mono<Debt> getDebtByDNI(@PathVariable String dni) throws InterruptedException {
+
+		try {
+
+			Mono<Debt> fluxdebt = this.bankAccountsService
+					.comunicationWebClientDebtObtenerCustomerbyDni(dni); 
+
+			long temporizador = (5 * 1000);
+
+			Thread.sleep(temporizador);
+ 
+			return fluxdebt;
+			 
+		} catch (InterruptedException e) {
+			log.info(e.toString());
+			Thread.currentThread().interrupt();
+			return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
+		}
+	}
+
 	@PostMapping
 	@CircuitBreaker(name = BANK_ACCOUNTS_CONTACT_TO_CUSTOMERSERVICE, fallbackMethod = "bankAccountContacttoCustomer")
-	public Mono<BankAccounts> create(@RequestBody BankAccounts bankAccounts) throws InterruptedException {
+	public Mono<BankAccounts> create(@RequestBody BankAccounts bankAccounts)
+			throws InterruptedException, ExecutionException, ParseException {
 
 		boolean validationvalue = this.validationRegisterRequest(bankAccounts);
 
 		if (validationvalue) {
 
+			List<Customer> listCustomer = new ArrayList<>();
+			
+			List<Debt> listDebt = new ArrayList<>();
+			
+			/*
+			 
+		Sin Mock 
+			 	
+		Llamado con WebClient a Servicio de Customer y Debt para realizar las validaciones solicitadas 
+			 		
+			Mono<Customer> endpointResponse = this.bankAccountsService.comunicationWebClientCustomerObtenerCustomerbyDni(bankAccounts.getCustomer().getDniCustomer());
+
+			endpointResponse.flux().collectList().subscribe(listCustomer::addAll);
+	
+			Mono<Debt> debtendpointResponse = this.bankAccountsService.comunicationWebClientDebtObtenerCustomerbyDni(bankAccounts.getCustomer().getDniCustomer());
+
+			debtendpointResponse.flux().collectList().subscribe(listDebt::addAll);
+
+			*/
+			
 			var typeBanksAccounts = this.typeBankAccountsService
 					.getTypeBankAccountsbyId(bankAccounts.getTypeBankAccounts().getId());
 
 			List<TypeBankAccounts> listtypeBanksAccounts = new ArrayList<>();
 
-			typeBanksAccounts.flux().collectList().subscribe(listtypeBanksAccounts::addAll);
+			typeBanksAccounts.flux().collectList().subscribe(listtypeBanksAccounts::addAll); 
+			
+			long temporizador = (5 * 1000);
 
-			Mono<Customer> endpointResponse = customerServiceClient.get()
-					.uri("/customer/".concat(bankAccounts.getCustomer().getCodeCustomer()))
-					.accept(MediaType.APPLICATION_JSON).retrieve().bodyToMono(Customer.class).log()
-					.doOnError(ex -> {
-						throw new RuntimeException("the exception message is - " + ex.getMessage());
-					});
-
-			List<Customer> listCustomer = new ArrayList<>();
-
-			endpointResponse.flux().collectList().subscribe(listCustomer::addAll);
-
+			Thread.sleep(temporizador);
+			
+			/* Comentar sin Mock */
+			
+			listCustomer = this.comunicationWebClientObtenerCustomerMock();
+			
+			// Descomentar para validar el Mock del Service Debt
+			
+			//listDebt = this.comunicationWebClientObtenerDebtMock();
+			 
 			try {
 
-				long temporizador = (10 * 1000);
+				// Modificar sin mock a 13 segundos
+				
+				long temporizador1 = (1 * 1000);
 
-				Thread.sleep(temporizador);
-
+				Thread.sleep(temporizador1);
+				 	
 				codigoValidatorCustomer = this.validardorCustomer(listCustomer, bankAccounts);
 
 				log.info("Validar Codigo Repetido --->" + codigoValidatorCustomer);
@@ -88,6 +161,10 @@ public class BankAccountsController {
 				codigoValidatorTypeBankAccounts = this.validardorTypeBankAccounts(listtypeBanksAccounts, bankAccounts);
 
 				log.info("Obtener valor para validar Id --->" + codigoValidatorTypeBankAccounts);
+				
+				codigoValidatorDebt = this.validardorSielCustomertieneunaDebt(listDebt);
+				
+				log.info("Obtener Debt para si el cliente tiene un Deuda --->" + codigoValidatorDebt);
 
 				if (codigoValidatorCustomer.equals("")) {
 					return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
@@ -99,6 +176,11 @@ public class BankAccountsController {
 							"El Id de Tipo Cuenta Bancario no existe"));
 				}
 
+				if (!codigoValidatorDebt.equals("")) {
+					return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
+							"El Cliente que se desea Registrar, posee deuda"));
+				}
+				
 				// Validar dependiendo el Tipo de Cliente
 
 				if (listCustomer.get(0).getCustomertype().getId().equals(1)) {
@@ -173,7 +255,8 @@ public class BankAccountsController {
 
 		try {
 
-			Flux<BankAccounts> banksAccountsflux = this.bankAccountsService.getAllBankAccountsByNumberAccount(numberAccount);
+			Flux<BankAccounts> banksAccountsflux = this.bankAccountsService
+					.getAllBankAccountsByNumberAccount(numberAccount);
 
 			List<BankAccounts> list1 = new ArrayList<>();
 
@@ -226,10 +309,10 @@ public class BankAccountsController {
 		} else if (bankAccounts.getAvailableBalanceAccount() == 0.00) {
 			validatorbankAccounts = false;
 			messageBadRequest = "availableBalanceAccount no puede ser vacio";
-		} else if (bankAccounts.getCustomer().getCodeCustomer() == null
-				|| bankAccounts.getCustomer().getCodeCustomer().equals("")) {
+		} else if (bankAccounts.getCustomer().getDniCustomer() == null
+				|| bankAccounts.getCustomer().getDniCustomer().equals("")) {
 			validatorbankAccounts = false;
-			messageBadRequest = "customer.codeCustomer no puede ser vacio";
+			messageBadRequest = "customer.dniCustomer no puede ser vacio";
 		} else {
 			validatorbankAccounts = true;
 		}
@@ -251,6 +334,8 @@ public class BankAccountsController {
 			bankAccounts.getCustomer().setDirectionCustomer(list1.get(0).getDirectionCustomer());
 			bankAccounts.getCustomer().setEmailCustomer(list1.get(0).getEmailCustomer());
 			bankAccounts.getCustomer().setPhoneNumberCustomer(list1.get(0).getPhoneNumberCustomer());
+			bankAccounts.getCustomer().setBirthDateCustomer(list1.get(0).getBirthDateCustomer());
+			bankAccounts.getCustomer().setRegisterDateCustomer(list1.get(0).getRegisterDateCustomer());
 			bankAccounts.getCustomer().setDniCustomer(list1.get(0).getDniCustomer());
 			bankAccounts.getCustomer().setCustomertype(list1.get(0).getCustomertype());
 			bankAccounts.getCustomer().setBank(list1.get(0).getBank());
@@ -259,6 +344,19 @@ public class BankAccountsController {
 
 		return codigoValidatorCustomer;
 	}
+	
+	public String validardorSielCustomertieneunaDebt(List<Debt> list1) {
+
+		if (list1.isEmpty()) {
+			codigoValidatorDebt = "";
+		} else {
+			codigoValidatorDebt = list1.get(0).getCustomer().getDniCustomer(); 
+
+		}
+
+		return codigoValidatorDebt;
+	}
+	
 
 	public Integer validardorTypeBankAccounts(List<TypeBankAccounts> list1, BankAccounts bankAccounts) {
 
@@ -275,10 +373,81 @@ public class BankAccountsController {
 
 		return codigoValidatorTypeBankAccounts;
 	}
-	
-	public Mono<Customer> bankAccountContacttoCustomer(Throwable ex) { 
+
+	public Mono<Customer> bankAccountContacttoCustomer(Throwable ex) {
 		log.info("Message ---->" + ex.getMessage());
 		Customer mockServiceResponse = null;
 		return Mono.just(mockServiceResponse);
 	}
+	
+
+	// Metodo para Mock
+
+	public List<Customer> comunicationWebClientObtenerCustomerMock() throws ParseException {
+
+		List<Customer> customers = new ArrayList<>();
+		 
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+		Date dateBirth = sdf.parse("2001-03-01"); 
+		
+		customers.add(new Customer(
+				"6288256a24f51675daabff60", 
+				"CP1", 
+				"PRUEBACLIENTEACTUALIZAR", 
+				"APELLIDOCLIENTE4",
+				"DIRECCIONCLIENTE4", 
+				"EMAIL322@PRUEBA.COM",
+				"2132132100", 
+				dateBirth, 
+				new Date(), 
+				"213210011",
+				new CustomerType(1, "Personal"), 
+				new Bank("628570778f9e833491ad8ba4", "cb1", "PRUEBABANCOACTUALIZACION","PRUEBADIRECCIONACTUALIZACION")));
+
+		log.info("Vista Customer con Dni Filtrado -->" + customers);
+
+		return customers;
+	}
+	
+	
+	public List<Debt> comunicationWebClientObtenerDebtMock() throws ParseException {
+
+		List<Debt> debt = new ArrayList<>();
+		 
+		
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+		Date dateBirth = sdf.parse("2001-03-01"); 
+		
+		String dateregisterdebt="2022-05-31";    
+		Date debtregister = sdf.parse(dateregisterdebt); 
+		
+		String expiradate="2022-07-01";    
+		Date debtexpira = sdf.parse(expiradate); 
+		
+		debt.add(new Debt(
+				"a386158d-f2f8-41bc-a932-91c5a11c5996",
+				10,
+				debtregister,
+				debtexpira,
+				true,
+				new Customer(
+						"6288256a24f51675daabff60", 
+						"CP1", 
+						"PRUEBACLIENTEACTUALIZAR", 
+						"APELLIDOCLIENTE4",
+						"DIRECCIONCLIENTE4", 
+						"EMAIL322@PRUEBA.COM",
+						"2132132100", 
+						dateBirth, 
+						new Date(), 
+						"213210011",
+						new CustomerType(1, "Personal"), 
+						new Bank("628570778f9e833491ad8ba4", "cb1", "PRUEBABANCOACTUALIZACION","PRUEBADIRECCIONACTUALIZACION"))));
+
+		log.info("Vista Debt con Dni Filtrado -->" + debt);
+
+		return debt;
+	}
+	
+		
 }

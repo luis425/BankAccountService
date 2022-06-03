@@ -311,7 +311,7 @@ public class MovementsBankAccountsController {
 
 					// Depostitar a Numero Destinatario
 
-					if (codigoValidatorMovementsBankAccounts == "") {
+					if (codigoValidatorMovementsBankAccounts.equals("")) {
 
 						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
 								"El Numero de Cuenta no existe"));
@@ -563,7 +563,7 @@ public class MovementsBankAccountsController {
 
 					// Depositar a tu misma Cuenta
 
-					if (codigoValidatorMovementsBankAccounts == "") {
+					if (codigoValidatorMovementsBankAccounts.equals("")) {
 
 						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
 								"El Numero de Cuenta no existe"));
@@ -782,13 +782,13 @@ public class MovementsBankAccountsController {
 		boolean validator;
 
 		if (movementsBankAccounts.getBankAccounts().getNumberAccount() == null
-				|| movementsBankAccounts.getBankAccounts().getNumberAccount() == "") {
+				|| movementsBankAccounts.getBankAccounts().getNumberAccount().equals("")) {
 			validator = false;
 		} else if (movementsBankAccounts.getAmount() == 0.00) {
 			validator = false;
 		} else if (movementsBankAccounts.getBankAccounts().getKeyAccount() == 0) {
 			validator = false;
-		} else if (movementsBankAccounts.getDescription() == null || movementsBankAccounts.getDescription() == "") {
+		} else if (movementsBankAccounts.getDescription() == null || movementsBankAccounts.getDescription().equals("")) {
 			validator = false;
 		} else {
 			validator = true;
