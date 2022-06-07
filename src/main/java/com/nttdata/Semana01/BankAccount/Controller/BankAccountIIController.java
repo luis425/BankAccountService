@@ -1,7 +1,6 @@
 package com.nttdata.Semana01.BankAccount.Controller;
 
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -9,27 +8,21 @@ import java.util.concurrent.ExecutionException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController; 
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.nttdata.Semana01.BankAccount.DTO.Bank;
 import com.nttdata.Semana01.BankAccount.DTO.Customer;
-import com.nttdata.Semana01.BankAccount.DTO.CustomerType;
-import com.nttdata.Semana01.BankAccount.DTO.Debt;
 import com.nttdata.Semana01.BankAccount.Entity.BankAccounts;
 import com.nttdata.Semana01.BankAccount.Entity.TypeBankAccounts;
-import com.nttdata.Semana01.BankAccount.Repository.BankAccountsRepository;
 import com.nttdata.Semana01.BankAccount.Service.BankAccountsService;
 import com.nttdata.Semana01.BankAccount.Service.TypeBankAccountsService;
 import com.nttdata.Semana01.BankAccount.api.client.CustomerApiClient;
-import com.nttdata.Semana01.BankAccount.response.BankAccountResponse;
+import com.nttdata.Semana01.BankAccount.response.CreditCardResponse;
 import com.nttdata.Semana01.BankAccount.response.CustomerResponse;
 import com.nttdata.Semana01.BankAccount.response.DebtResponse;
 
@@ -40,17 +33,14 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 @RestController
-@RequestMapping("/bankAccounts")
-public class BankAccountsController {
-
+@RequestMapping("/bankAccountsNew")
+public class BankAccountIIController {
+	
 	@Autowired
 	TypeBankAccountsService typeBankAccountsService;
 
 	@Autowired
 	BankAccountsService bankAccountsService;
-	 
-	@Autowired
-	BankAccountsRepository bankAccountsRepository;
 
 	private String codigoValidatorCustomer ="";
 	
@@ -62,51 +52,8 @@ public class BankAccountsController {
 	
 	@Autowired
 	CustomerApiClient customerApiClient; 
-
-	private static final String BANK_ACCOUNTS_CONTACT_TO_CUSTOMERSERVICE = "bankAccountsContactToCustomerService";
-
-	// Validar Servicio de Comunicacion con el Servicio de Customer
-
-	@GetMapping(value = "/ObtenerCustomerbyDNI/{dni}")
-	public Mono<Customer>  getCustomerByDNI(@PathVariable String dni) throws InterruptedException {
-
-		try {
-
-			Mono<Customer> fluxcustomer = this.bankAccountsService.comunicationWebClientCustomerObtenerCustomerbyDni(dni); 
-
-			long temporizador = (5 * 1000);
-
-			Thread.sleep(temporizador);
- 
-			return fluxcustomer;
-			 
-		} catch (InterruptedException e) {
-			log.info(e.toString());
-			Thread.currentThread().interrupt();
-			return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
-		}
-		 
-	}
 	
-	@GetMapping(value = "/ObtenerDebtbyDNI/{dni}")
-	public Mono<Debt> getDebtByDNI(@PathVariable String dni) throws InterruptedException {
-
-		try {
-
-			Mono<Debt> fluxdebt = this.bankAccountsService.comunicationWebClientDebtObtenerCustomerbyDni(dni); 
-
-			long temporizador = (5 * 1000);
-
-			Thread.sleep(temporizador);
- 
-			return fluxdebt;
-			 
-		} catch (InterruptedException e) {
-			log.info(e.toString());
-			Thread.currentThread().interrupt();
-			return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
-		}
-	}
+	private static final String BANK_ACCOUNTS_CONTACT_TO_CUSTOMERSERVICE = "bankAccountsContactToCustomerService";
 
 	@PostMapping
 	@CircuitBreaker(name = BANK_ACCOUNTS_CONTACT_TO_CUSTOMERSERVICE, fallbackMethod = "bankAccountContacttoCustomer")
@@ -116,13 +63,7 @@ public class BankAccountsController {
 		boolean validationvalue = this.validationRegisterRequest(bankAccounts);
 
 		if (validationvalue) {
- 
-		//Sin Mock 
-			 	
-		//Llamado con WebClient a Servicio de Customer y Debt para realizar las validaciones solicitadas 
-			
-			// Service para obtener Datos del Customer
-			
+  		
 			CustomerResponse  endpointResponseCustomer = this.bankAccountsService.comunicationWebClientCustomerObtenerCustomerbyDniResponse(bankAccounts.getCustomer().getDniCustomer());
 			
 			DebtResponse  endpointResponseDebt = this.bankAccountsService.comunicationWebClientDebtObtenerbyDni(bankAccounts.getCustomer().getDniCustomer());
@@ -148,15 +89,6 @@ public class BankAccountsController {
 			typeBanksAccounts.flux().collectList().subscribe(listtypeBanksAccounts::addAll); 
 			
 			
-			 
-			/* ------------- Comentar sin Mock ------------------- */
-			
-			//listCustomer = this.comunicationWebClientObtenerCustomerMock();
-			
-			// Descomentar para validar el Mock del Service Debt
-			
-			//listDebt = this.comunicationWebClientObtenerDebtMock();
-			 
 			try {
  				
 				long temporizador1 = (5 * 1000);
@@ -229,7 +161,7 @@ public class BankAccountsController {
 								"El Cliente Personal solo puede tener  un máximo de una cuenta de ahorro, una cuenta corriente o cuentas a plazo fijo."));
 					}
 
-				} else {
+				} else if (endpointResponseCustomer.getCustomertype().getId().equals(2)) { 
 
 					// Empresarial
 
@@ -245,6 +177,49 @@ public class BankAccountsController {
 						return this.bankAccountsService.createBankAccountsRepository(bankAccounts);
 					}
 
+				} else if (endpointResponseCustomer.getCustomertype().getId().equals(3)) { 
+
+					// VIP
+					
+					if (bankAccounts.getCreditCard() == null || bankAccounts.getCreditCard().getNumberCreditCard().equals("")) {
+						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
+								"Para Creacion VIP, se requiere creditCard.numberCreditCard."));
+					}
+					
+					CreditCardResponse endpointResponseCreditCard = this.bankAccountsService.comunicationWebCreditCardbyNumberCreditCard(bankAccounts.getCreditCard().getNumberCreditCard());
+					
+					if (endpointResponseCreditCard == null) {
+						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
+								"No posee tarjeta de Credito al momento de la creacion de la cuenta VIP."));
+					} else {
+
+						bankAccounts.setDateCreationBankAccount(new Date());
+						bankAccounts.setCreditCard(endpointResponseCreditCard);
+						return this.bankAccountsService.createBankAccountsRepository(bankAccounts);
+					}
+					
+				}else { 
+
+					// PYME
+
+					if (bankAccounts.getCreditCard() == null || bankAccounts.getCreditCard().getNumberCreditCard().equals("")) {
+						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
+								"Para Creacion PYME, se requiere creditCard.numberCreditCard."));
+					}
+					
+					
+					CreditCardResponse endpointResponseCreditCard = this.bankAccountsService.comunicationWebCreditCardbyNumberCreditCard(bankAccounts.getCreditCard().getNumberCreditCard());
+					
+					if (endpointResponseCreditCard == null) {
+						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
+								"No posee tarjeta de Credito al momento de la creacion de la cuenta PYME."));
+					} else {
+
+						bankAccounts.setDateCreationBankAccount(new Date());
+						bankAccounts.setCreditCard(endpointResponseCreditCard);
+						return this.bankAccountsService.createBankAccountsRepository(bankAccounts);
+					}
+
 				}
 
 			} catch (InterruptedException e) {
@@ -257,80 +232,6 @@ public class BankAccountsController {
 			return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, messageBadRequest));
 		}
 
-	}
-
-	@GetMapping(value = "/{numberAccount}")
-	public Mono<ResponseEntity<BankAccounts>> getBankAccountsByNumberAccount(@PathVariable String numberAccount) {
-
-		try {
-
-			Flux<BankAccounts> banksAccountsflux = this.bankAccountsService
-					.getAllBankAccountsByNumberAccount(numberAccount);
-
-			List<BankAccounts> list1 = new ArrayList<>();
-
-			banksAccountsflux.collectList().subscribe(list1::addAll);
-
-			long temporizador = (5 * 1000);
-
-			Thread.sleep(temporizador);
-
-			if (list1.isEmpty()) {
-				return null;
-
-			} else {
-				return Mono.just(ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(list1.get(0)))
-						.defaultIfEmpty(ResponseEntity.notFound().build());
-			}
-
-		} catch (InterruptedException e) {
-			log.info(e.toString());
-			Thread.currentThread().interrupt();
-			return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
-		}
-
-	}
-
-	@GetMapping(value = "/BankAccountsbyCodeCustomer/{codeCustomer}")
-	public Mono<ResponseEntity<Flux<BankAccounts>>> getBankAccountsByCodeCustomer(@PathVariable String codeCustomer) {
-		Flux<BankAccounts> list = this.bankAccountsService.getAllBankAccountsByCodeCustomer(codeCustomer);
-		return Mono.just(ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(list))
-				.defaultIfEmpty(ResponseEntity.notFound().build());
-	}
-
-	@GetMapping(value = "/bankAccountbyNumberAccountResponse/{numberAccount}")
-	public Mono<ResponseEntity<BankAccountResponse>> getbankAccountbyNumberAccountResponse(@PathVariable String numberAccount) {
-
-		try {
-
-			Flux<BankAccountResponse> customerflux = this.bankAccountsService.getBankAccountbyNumberAccountResponse(numberAccount);
-
-			List<BankAccountResponse> list1 = new ArrayList<>();
-
-			customerflux.collectList().subscribe(list1::addAll);
-
-			long temporizador = (5 * 1000);
-
-			Thread.sleep(temporizador);
-
-			if (list1.isEmpty()) {
-				return null;
-
-			} else {
-				return Mono.just(ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(list1.get(0)))
-						.defaultIfEmpty(ResponseEntity.notFound().build());
-			}
-
-		} catch (InterruptedException e) {
-			log.info(e.toString());
-			Thread.currentThread().interrupt();
-			return Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage()));
-		}
-	}
-	 
-	@PostMapping("/bankAccountReg")
-	public Mono<BankAccounts> createYankiAccount(@RequestBody BankAccounts bankAccounts) { 
-		 return this.bankAccountsRepository.save(bankAccounts);  
 	}
 	
 	public boolean validationRegisterRequest(BankAccounts bankAccounts) {
@@ -374,13 +275,7 @@ public class BankAccountsController {
 			bankAccounts.getCustomer().setId(endpointResponseCustomer.getId());
 			bankAccounts.getCustomer().setCodeCustomer(codigoValidatorCustomer);
 			bankAccounts.getCustomer().setNameCustomer(endpointResponseCustomer.getNameCustomer());
-			bankAccounts.getCustomer().setLastNameCustomer(endpointResponseCustomer.getLastNameCustomer());
-			//bankAccounts.getCustomer().setDirectionCustomer(list1.get(0).getDirectionCustomer());
-			//bankAccounts.getCustomer().setEmailCustomer(list1.get(0).getEmailCustomer());
-			//bankAccounts.getCustomer().setPhoneNumberCustomer(list1.get(0).getPhoneNumberCustomer());
-			//bankAccounts.getCustomer().setBirthDateCustomer(list1.get(0).getBirthDateCustomer());
-			//bankAccounts.getCustomer().setRegisterDateCustomer(list1.get(0).getRegisterDateCustomer());
-			//bankAccounts.getCustomer().setDniCustomer(list1.get(0).getDniCustomer());
+			bankAccounts.getCustomer().setLastNameCustomer(endpointResponseCustomer.getLastNameCustomer()); 
 			bankAccounts.getCustomer().setCustomertype(endpointResponseCustomer.getCustomertype());
 			bankAccounts.getCustomer().setBank(endpointResponseCustomer.getBank());
 			
@@ -425,83 +320,6 @@ public class BankAccountsController {
 		Customer mockServiceResponse = null;
 		return Mono.just(mockServiceResponse);
 	}
+	 
 	
-
-	@GetMapping(value = "/BankAccountResponse/{numberAccount}")
-	public Flux<BankAccountResponse>  getBankAccountsByNumberAccountResponse(@PathVariable String numberAccount) {
-		
-		return bankAccountsService.getBankAccountbyNumberAccountResponse(numberAccount);
-	
-	}
-	
-	
-	// Metodo para Mock
-
-	public List<Customer> comunicationWebClientObtenerCustomerMock() throws ParseException {
-
-		List<Customer> customers = new ArrayList<>();
-		 
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-		Date dateBirth = sdf.parse("2001-03-01"); 
-		
-		customers.add(new Customer(
-				"6288256a24f51675daabff60", 
-				"CP1", 
-				"PRUEBACLIENTEACTUALIZAR", 
-				"APELLIDOCLIENTE4",
-				"DIRECCIONCLIENTE4", 
-				"EMAIL322@PRUEBA.COM",
-				"2132132100", 
-				dateBirth, 
-				new Date(), 
-				"213210011",
-				new CustomerType(1, "Personal"), 
-				new Bank("628570778f9e833491ad8ba4", "cb1", "PRUEBABANCOACTUALIZACION","PRUEBADIRECCIONACTUALIZACION")));
-
-		log.info("Vista Customer con Dni Filtrado -->" + customers);
-
-		return customers;
-	}
-	
-	
-	public List<Debt> comunicationWebClientObtenerDebtMock() throws ParseException {
-
-		List<Debt> debt = new ArrayList<>();
-		 
-		
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-		Date dateBirth = sdf.parse("2001-03-01"); 
-		
-		String dateregisterdebt="2022-05-31";    
-		Date debtregister = sdf.parse(dateregisterdebt); 
-		
-		String expiradate="2022-07-01";    
-		Date debtexpira = sdf.parse(expiradate); 
-		
-		debt.add(new Debt(
-				"a386158d-f2f8-41bc-a932-91c5a11c5996",
-				10,
-				debtregister,
-				debtexpira,
-				true,
-				new Customer(
-						"6288256a24f51675daabff60", 
-						"CP1", 
-						"PRUEBACLIENTEACTUALIZAR", 
-						"APELLIDOCLIENTE4",
-						"DIRECCIONCLIENTE4", 
-						"EMAIL322@PRUEBA.COM",
-						"2132132100", 
-						dateBirth, 
-						new Date(), 
-						"213210011",
-						new CustomerType(1, "Personal"), 
-						new Bank("628570778f9e833491ad8ba4", "cb1", "PRUEBABANCOACTUALIZACION","PRUEBADIRECCIONACTUALIZACION"))));
-
-		log.info("Vista Debt con Dni Filtrado -->" + debt);
-
-		return debt;
-	}
-	
-		
 }

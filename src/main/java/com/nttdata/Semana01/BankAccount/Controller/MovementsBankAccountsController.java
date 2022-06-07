@@ -23,6 +23,7 @@ import com.nttdata.Semana01.BankAccount.Entity.BankAccounts;
 import com.nttdata.Semana01.BankAccount.Entity.MovementsBankAccounts;
 import com.nttdata.Semana01.BankAccount.Service.BankAccountsService;
 import com.nttdata.Semana01.BankAccount.Service.MovementsBankAccountsService;
+import com.nttdata.Semana01.BankAccount.util.Utils;
 
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
@@ -33,8 +34,6 @@ import reactor.core.publisher.Mono;
 @RequestMapping("/movementsBankAccounts")
 public class MovementsBankAccountsController {
 
-	// private final CustomerService customerService;
-
 	@Autowired
 	BankAccountsService bankAccountsService;
 
@@ -42,9 +41,7 @@ public class MovementsBankAccountsController {
 	MovementsBankAccountsService movementsBankAccountsService;
 
 	private String codigoValidatorMovementsBankAccounts;
-
-	// private String codigoValidatorMovementsBankAccountsDestination;
-
+ 
 	@PostMapping(value = "/retreats")
 	public Mono<MovementsBankAccounts> createMovementsBankAccountsRetreats(
 			@RequestBody MovementsBankAccounts movementsBankAccounts) {
@@ -62,18 +59,17 @@ public class MovementsBankAccountsController {
 
 				bankAccount.collectList().subscribe(list1::addAll);
 
-				long temporizador = (15 * 1000);
+				long temporizador = (7 * 1000);
 
 				Thread.sleep(temporizador);
 
 				codigoValidatorMovementsBankAccounts = this.validardor(list1, movementsBankAccounts);
 
-				log.info("Verificar lista de Banco -->" + codigoValidatorMovementsBankAccounts);
+				log.info("Verificar Numero de Cuenta -->" + codigoValidatorMovementsBankAccounts);
 
 				if (codigoValidatorMovementsBankAccounts.equals("")) {
 
-					return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-							"El Numero de Cuenta no existe"));
+					return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.numberAccountnoexiste));
 
 				} else {
 
@@ -83,15 +79,12 @@ public class MovementsBankAccountsController {
 
 						if (list1.get(0).getTypeBankAccounts().getId().equals(1)) {
 
-							// Ahorro
+							// Ahorro - Validar Maximos Retiros por Mes 
 
-							Integer ultimaFechaEnviado = movementsBankAccounts.getDateMovement().getMonth() + 1;
-							// Integer ultimaFechaEnviado = 6;
+							Integer ultimaFechaEnviado = movementsBankAccounts.getDateMovement().getMonth() + 1; 
 
 							Flux<MovementsBankAccounts> movementbankAccount = this.movementsBankAccountsService
-									.getAllMovementsBankAccountsByNumberAccount(
-											movementsBankAccounts.getBankAccounts().getNumberAccount(),
-											ultimaFechaEnviado);
+							.getAllMovementsBankAccountsByNumberAccount(movementsBankAccounts.getBankAccounts().getNumberAccount(),ultimaFechaEnviado);
 
 							List<MovementsBankAccounts> list2 = new ArrayList<>();
 
@@ -101,71 +94,59 @@ public class MovementsBankAccountsController {
 
 							Thread.sleep(temporizador2);
 
-							log.info("Obtener Valor de Movimientos realizados de la numero de cuenta enviado --->"
-									+ list2);
+							log.info("Obtener Valor de Movimientos realizados de la numero de cuenta enviado --->" + list2);
 
 							if (list2.isEmpty()) {
 
-								if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1)
-										.getAvailableBalanceAccount()) {
+								if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1).getAvailableBalanceAccount()) {
 
-									return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-											"Supero su saldo disponible"));
+									return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.superosaldo));
 
 								} else {
 
-									Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount()
-											- movementsBankAccounts.getAmount();
+									Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount() - movementsBankAccounts.getAmount();
 
 									list1.get(list1.size() - 1).setAvailableBalanceAccount(descuento);
 
-									BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,
-											movementsBankAccounts.getBankAccounts());
+									BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,movementsBankAccounts.getBankAccounts());
 
-									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
 									movementsBankAccounts.setMovementsBankAccountsCode(UUID.randomUUID().toString());
 
-									return this.movementsBankAccountsService
-											.createMovementsBankAccounts(movementsBankAccounts);
+									return this.movementsBankAccountsService.createMovementsBankAccounts(movementsBankAccounts);
 
 								}
 
 							} else {
+								
+								log.info("Obtener maximo Limite Tipo Ahorro --->" + list2.get(0).getBankAccounts().getTypeBankAccounts().getMaximumLimit());
+								
+								log.info("Tamaño de la lista Tipo Ahorro ---->" + list2.size());
 
-								log.info("Obtener maximo Limite --->"
-										+ list2.get(0).getBankAccounts().getTypeBankAccounts().getMaximumLimit());
-								log.info("Tamaño de la lista --->" + list2.size());
+								Integer ultimaFechaMesRegistrado = list2.get(list2.size() - 1).getDateMovement().getMonth() + 1;
 
-								Integer ultimaFechaMesRegistrado = list2.get(list2.size() - 1).getDateMovement()
-										.getMonth() + 1;
+								log.info("Ultioma Fecha Mes Obtenida Tipo Ahorro --->" + ultimaFechaMesRegistrado);
 
-								log.info("Ultioma Fecha Mes Obtenida--->" + ultimaFechaMesRegistrado);
+								log.info("Ultioma Fecha Mes Enviada Tipo Ahorro  --->" + ultimaFechaEnviado);
 
-								log.info("Ultioma Fecha Mes Enviada --->" + ultimaFechaEnviado);
+								if (list2.size() >= list2.get(list2.size() - 1).getBankAccounts().getTypeBankAccounts().getMaximumLimit()) {
 
-								if (list2.size() >= list2.get(list2.size() - 1).getBankAccounts().getTypeBankAccounts()
-										.getMaximumLimit()) {
-
-									return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-											"Supero el Limite De movimientos Mensual"));
+									return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.superolimitsaldo));
 
 								} else {
 
-									Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount()
-											- movementsBankAccounts.getAmount();
+									Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount() - movementsBankAccounts.getAmount();
 
 									list1.get(list1.size() - 1).setAvailableBalanceAccount(descuento);
 
-									BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,
-											movementsBankAccounts.getBankAccounts());
+									BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,movementsBankAccounts.getBankAccounts());
 
-									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
 									movementsBankAccounts.setMovementsBankAccountsCode(UUID.randomUUID().toString());
 
-									return this.movementsBankAccountsService
-											.createMovementsBankAccounts(movementsBankAccounts);
+									return this.movementsBankAccountsService.createMovementsBankAccounts(movementsBankAccounts);
 
 								}
 
@@ -175,32 +156,30 @@ public class MovementsBankAccountsController {
 
 							// Corriente
 
-							if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1)
-									.getAvailableBalanceAccount()) {
+							if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1).getAvailableBalanceAccount()) {
 
-								return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-										"Supero su saldo disponible"));
+								return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.superosaldo));
 
 							} else {
 
-								Double comision = movementsBankAccounts.getAmount() + movementsBankAccounts.getAmount()
-										/ list1.get(list1.size() - 1).getTypeBankAccounts().getCommission();
+								Double totaldescuento = movementsBankAccounts.getAmount() + movementsBankAccounts.getAmount() / list1.get(list1.size() - 1).getTypeBankAccounts().getCommission();
 
-								log.info("Total Descuento " + comision);
+								log.info("Total Descuento Corriente" + totaldescuento);
 
-								Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount() - comision;
+								Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount() - totaldescuento;
 
 								list1.get(list1.size() - 1).setAvailableBalanceAccount(descuento);
 
-								BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,
-										movementsBankAccounts.getBankAccounts());
+								BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,movementsBankAccounts.getBankAccounts());
 
-								this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+								this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
 								movementsBankAccounts.setMovementsBankAccountsCode(UUID.randomUUID().toString());
 
-								return this.movementsBankAccountsService
-										.createMovementsBankAccounts(movementsBankAccounts);
+								// Seteo de amount enviado mas la comision calculada
+								movementsBankAccounts.setAmount(totaldescuento);
+								
+								return this.movementsBankAccountsService.createMovementsBankAccounts(movementsBankAccounts);
 
 							}
 
@@ -208,44 +187,38 @@ public class MovementsBankAccountsController {
 
 							// Plazo Fijo
 
-							if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1)
-									.getAvailableBalanceAccount()) {
+							if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1).getAvailableBalanceAccount()) {
 
-								return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-										"Supero su saldo disponible"));
+								return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.superosaldo));
 
 							} else {
 
-								DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
-								String strDateEstimado = dateFormat
-										.format(list1.get(list1.size() - 1).getDateLastBankAccount());
-
-								log.info("Fecha estimanda para el retiro " + strDateEstimado);
+								DateFormat dateFormat = new SimpleDateFormat(Utils.formatoDate);
+								 
+								String strDateEstimado = dateFormat.format(list1.get(list1.size() - 1).getDateLastBankAccount());
+									
+								log.info("Fecha estimanda para el retiro Fijo " + strDateEstimado);
 
 								String strDateActual = dateFormat.format(new Date());
 
-								log.info("Fecha Actual " + strDateActual);
+								log.info("Fecha Actual para retiro Fijo " + strDateActual);
 
 								if (strDateEstimado.equals(strDateActual)) {
 
-									Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount()
-											- movementsBankAccounts.getAmount();
+									Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount() - movementsBankAccounts.getAmount();
 
 									list1.get(list1.size() - 1).setAvailableBalanceAccount(descuento);
 
-									BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,
-											movementsBankAccounts.getBankAccounts());
+									BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,movementsBankAccounts.getBankAccounts());
 
-									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
 									movementsBankAccounts.setMovementsBankAccountsCode(UUID.randomUUID().toString());
 
-									return this.movementsBankAccountsService
-											.createMovementsBankAccounts(movementsBankAccounts);
+									return this.movementsBankAccountsService.createMovementsBankAccounts(movementsBankAccounts);
 
 								} else {
-									return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-											"Fecha no permitido, para retirar dinero."));
+									return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.fechanoPermitido));
 								}
 
 							}
@@ -253,8 +226,7 @@ public class MovementsBankAccountsController {
 						}
 
 					} else {
-						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-								"Clave de Retiro es incorrecto"));
+						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.claveincorrecto));
 					}
 
 				}
@@ -273,8 +245,7 @@ public class MovementsBankAccountsController {
 	}
 
 	@PostMapping(value = "/deposits")
-	public Mono<MovementsBankAccounts> createMovementsBankAccountsDeposists(
-			@RequestBody MovementsBankAccounts movementsBankAccounts) {
+	public Mono<MovementsBankAccounts> createMovementsBankAccountsDeposists(@RequestBody MovementsBankAccounts movementsBankAccounts) {
 
 		boolean validationvalue = this.validationRegisterRequest(movementsBankAccounts);
 
@@ -282,16 +253,13 @@ public class MovementsBankAccountsController {
 
 			try {
 
-				Flux<BankAccounts> bankAccount = this.bankAccountsService
-						.getAllBankAccountsByNumberAccount(movementsBankAccounts.getBankAccounts().getNumberAccount());
+				Flux<BankAccounts> bankAccount = this.bankAccountsService.getAllBankAccountsByNumberAccount(movementsBankAccounts.getBankAccounts().getNumberAccount());
 
 				List<BankAccounts> list1Destination = new ArrayList<>();
 
 				if (movementsBankAccounts.getNumberAccountDestination() != null) {
 
-					Flux<BankAccounts> bankAccountDestination = this.bankAccountsService
-							.getAllBankAccountsByNumberAccount(
-									movementsBankAccounts.getBankAccounts().getNumberAccount());
+					Flux<BankAccounts> bankAccountDestination = this.bankAccountsService.getAllBankAccountsByNumberAccount(movementsBankAccounts.getNumberAccountDestination());
 
 					bankAccountDestination.collectList().subscribe(list1Destination::addAll);
 
@@ -301,7 +269,9 @@ public class MovementsBankAccountsController {
 
 				bankAccount.collectList().subscribe(list1::addAll);
 
-				Thread.sleep(15 * 1000);
+				long temporizador = (7 * 1000);
+
+				Thread.sleep(temporizador);
 
 				codigoValidatorMovementsBankAccounts = this.validardor(list1, movementsBankAccounts);
 
@@ -313,31 +283,27 @@ public class MovementsBankAccountsController {
 
 					if (codigoValidatorMovementsBankAccounts.equals("")) {
 
-						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-								"El Numero de Cuenta no existe"));
+						return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.numberAccountnoexiste));
 
 					} else {
 
 						if (list1Destination.isEmpty()) {
-							return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-									"El Numero de Cuenta Destinatario no existe"));
+							return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.numberAccountdestinatarionoexiste));
 						} else {
 
-							if (list1.get(0).getKeyAccount() == movementsBankAccounts.getBankAccounts()
-									.getKeyAccount()) {
+							if (list1.get(0).getKeyAccount() == movementsBankAccounts.getBankAccounts().getKeyAccount()) {
 
-								BankAccounts bankAccountsDestination = null;
+								BankAccounts bankAccountsDestination = new BankAccounts();
 
 								// Condicion dependiendo el tipo de Banco
 
 								if (list1.get(0).getTypeBankAccounts().getId().equals(1)) {
 
-									// Ahorro
+									// Ahorro por mes 
 
 									Integer ultimaFechaEnviado = movementsBankAccounts.getDateMovement().getMonth() + 1;
 
-									Flux<MovementsBankAccounts> movementbankAccount = this.movementsBankAccountsService
-											.getAllMovementsBankAccountsByNumberAccount(
+									Flux<MovementsBankAccounts> movementbankAccount = this.movementsBankAccountsService.getAllMovementsBankAccountsByNumberAccount(
 													movementsBankAccounts.getBankAccounts().getNumberAccount(),
 													ultimaFechaEnviado);
 
@@ -345,21 +311,21 @@ public class MovementsBankAccountsController {
 
 									movementbankAccount.collectList().subscribe(list2::addAll);
 
-									Thread.sleep(5 * 1000);
+									long temporizador2 = (5 * 1000);
 
-									log.info(
-											"Obtener Valor de Movimientos realizados de la numero de cuenta enviado --->"
-													+ list2);
+									Thread.sleep(temporizador2);
+
+									log.info("Obtener Valor de Movimientos realizados de la numero de cuenta enviado --->"+ list2);
 
 									if (list2.isEmpty()) {
 
 										if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1)
 												.getAvailableBalanceAccount()) {
 
-											return Mono.error(new ResponseStatusException(
-													HttpStatus.PRECONDITION_FAILED, "Supero su saldo disponible"));
+											return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.depositincomplete));
 
 										} else {
+											
 
 											Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount()
 													- movementsBankAccounts.getAmount();
@@ -369,11 +335,9 @@ public class MovementsBankAccountsController {
 											BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(
 													list1, movementsBankAccounts.getBankAccounts());
 
-											this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+											this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
-											Double depositodestination = list1Destination
-													.get(list1Destination.size() - 1).getAvailableBalanceAccount()
-													+ movementsBankAccounts.getAmount();
+											Double depositodestination = list1Destination.get(list1Destination.size() - 1).getAvailableBalanceAccount() + movementsBankAccounts.getAmount();
 
 											list1Destination.get(list1Destination.size() - 1)
 													.setAvailableBalanceAccount(depositodestination);
@@ -383,7 +347,7 @@ public class MovementsBankAccountsController {
 															bankAccountsDestination);
 
 											this.bankAccountsService
-													.createBankAccountsRepository(updateBankAccountsDestination);
+													.createBankAccountsRepository(updateBankAccountsDestination).subscribe();
 
 											movementsBankAccounts
 													.setMovementsBankAccountsCode(UUID.randomUUID().toString());
@@ -395,12 +359,11 @@ public class MovementsBankAccountsController {
 
 									} else {
 
-										log.info("Obtener maximo Limite --->" + list2.get(0).getBankAccounts()
-												.getTypeBankAccounts().getMaximumLimit());
+										log.info("Obtener maximo Limite --->" + list2.get(0).getBankAccounts().getTypeBankAccounts().getMaximumLimit());
+										
 										log.info("Tamaño de la lista --->" + list2.size());
 
-										Integer ultimaFechaMesRegistrado = list2.get(list2.size() - 1).getDateMovement()
-												.getMonth() + 1;
+										Integer ultimaFechaMesRegistrado = list2.get(list2.size() - 1).getDateMovement().getMonth() + 1;
 
 										log.info("Ultioma Fecha Mes Obtenida--->" + ultimaFechaMesRegistrado);
 
@@ -414,7 +377,17 @@ public class MovementsBankAccountsController {
 															"Supero el Limite De movimientos Mensual"));
 
 										} else {
-
+											
+											
+											if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1)
+													.getAvailableBalanceAccount()) {
+												
+												return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
+														"La cuenta que envia el deposito, no dispone del saldo suficiente del deposito que desea realizar."));
+											}	
+											
+											else {
+													 
 											Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount()
 													- movementsBankAccounts.getAmount();
 
@@ -423,7 +396,7 @@ public class MovementsBankAccountsController {
 											BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(
 													list1, movementsBankAccounts.getBankAccounts());
 
-											this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+											this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
 											Double depositodestination = list1Destination
 													.get(list1Destination.size() - 1).getAvailableBalanceAccount()
@@ -437,14 +410,16 @@ public class MovementsBankAccountsController {
 															bankAccountsDestination);
 
 											this.bankAccountsService
-													.createBankAccountsRepository(updateBankAccountsDestination);
+													.createBankAccountsRepository(updateBankAccountsDestination).subscribe();
 
 											movementsBankAccounts
 													.setMovementsBankAccountsCode(UUID.randomUUID().toString());
 
 											return this.movementsBankAccountsService
 													.createMovementsBankAccounts(movementsBankAccounts);
-
+											
+										  }	
+											
 										}
 
 									}
@@ -459,7 +434,7 @@ public class MovementsBankAccountsController {
 											.getAvailableBalanceAccount()) {
 
 										return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-												"Supero su saldo disponible"));
+												"La cuenta que envia el deposito, no dispone del saldo suficiente del deposito que desea realizar."));
 
 									} else {
 
@@ -477,20 +452,22 @@ public class MovementsBankAccountsController {
 										BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(
 												list1, movementsBankAccounts.getBankAccounts());
 
-										this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+										this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
 										Double depositodestination = list1Destination.get(list1Destination.size() - 1)
-												.getAvailableBalanceAccount() + comision;
-
+												.getAvailableBalanceAccount() + movementsBankAccounts.getAmount();
+										
 										list1Destination.get(list1Destination.size() - 1)
 												.setAvailableBalanceAccount(depositodestination);
+										
+										log.info("Deposito Destinatorio " + movementsBankAccounts.getAmount());
 
 										BankAccounts updateBankAccountsDestination = this
 												.validationUpdateBankAccountsDestinationRequest(list1Destination,
 														bankAccountsDestination);
 
 										this.bankAccountsService
-												.createBankAccountsRepository(updateBankAccountsDestination);
+												.createBankAccountsRepository(updateBankAccountsDestination).subscribe();
 
 										movementsBankAccounts
 												.setMovementsBankAccountsCode(UUID.randomUUID().toString());
@@ -502,9 +479,8 @@ public class MovementsBankAccountsController {
 
 								} else {
 
-									DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
-									String strDateEstimado = dateFormat
-											.format(list1.get(list1.size() - 1).getDateLastBankAccount());
+									DateFormat dateFormat = new SimpleDateFormat(Utils.formatoDate);
+									String strDateEstimado = dateFormat.format(list1.get(list1.size() - 1).getDateLastBankAccount());
 
 									log.info("Fecha estimanda para el retiro " + strDateEstimado);
 
@@ -522,10 +498,10 @@ public class MovementsBankAccountsController {
 										BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(
 												list1, movementsBankAccounts.getBankAccounts());
 
-										this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+										this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
 										Double depositodestination = list1Destination.get(list1Destination.size() - 1)
-												.getAvailableBalanceAccount() + descuento;
+												.getAvailableBalanceAccount() + movementsBankAccounts.getAmount();
 
 										list1Destination.get(list1Destination.size() - 1)
 												.setAvailableBalanceAccount(depositodestination);
@@ -535,7 +511,7 @@ public class MovementsBankAccountsController {
 														bankAccountsDestination);
 
 										this.bankAccountsService
-												.createBankAccountsRepository(updateBankAccountsDestination);
+												.createBankAccountsRepository(updateBankAccountsDestination).subscribe();
 
 										movementsBankAccounts
 												.setMovementsBankAccountsCode(UUID.randomUUID().toString());
@@ -561,7 +537,7 @@ public class MovementsBankAccountsController {
 
 				} else {
 
-					// Depositar a tu misma Cuenta
+					// Depositar a la Numero de Cuenta dependiendo al number Account
 
 					if (codigoValidatorMovementsBankAccounts.equals("")) {
 
@@ -587,20 +563,13 @@ public class MovementsBankAccountsController {
 
 								movementbankAccount.collectList().subscribe(list2::addAll);
 
-								Thread.sleep(5 * 1000);
+								long temporizador5 = (5 * 1000);
 
-								log.info("Obtener Valor de Movimientos realizados de la numero de cuenta enviado ---> "
-										+ list2);
+								Thread.sleep(temporizador5);
+
+								log.info("Obtener Valor de Movimientos realizados de la numero de cuenta enviado ---> " + list2);
 
 								if (list2.isEmpty()) {
-
-									if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1)
-											.getAvailableBalanceAccount()) {
-
-										return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-												"Supero su saldo disponible"));
-
-									} else {
 
 										Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount()
 												+ movementsBankAccounts.getAmount();
@@ -610,52 +579,40 @@ public class MovementsBankAccountsController {
 										BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(
 												list1, movementsBankAccounts.getBankAccounts());
 
-										this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+										this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
-										movementsBankAccounts
-												.setMovementsBankAccountsCode(UUID.randomUUID().toString());
+										movementsBankAccounts.setMovementsBankAccountsCode(UUID.randomUUID().toString());
 
-										return this.movementsBankAccountsService
-												.createMovementsBankAccounts(movementsBankAccounts);
-
-									}
+										return this.movementsBankAccountsService.createMovementsBankAccounts(movementsBankAccounts);
 
 								} else {
 
-									log.info("Obtener maximo Limite --->"
-											+ list2.get(0).getBankAccounts().getTypeBankAccounts().getMaximumLimit());
+									log.info("Obtener maximo Limite --->"+ list2.get(0).getBankAccounts().getTypeBankAccounts().getMaximumLimit());
 									log.info("Tamaño de la lista --->" + list2.size());
 
-									Integer ultimaFechaMesRegistrado = list2.get(list2.size() - 1).getDateMovement()
-											.getMonth() + 1;
+									Integer ultimaFechaMesRegistrado = list2.get(list2.size() - 1).getDateMovement().getMonth() + 1;
 
 									log.info("Ultioma Fecha Mes Obtenida--->" + ultimaFechaMesRegistrado);
 
 									log.info("Ultioma Fecha Mes Enviada --->" + ultimaFechaEnviado);
 
-									if (list2.size() >= list2.get(list2.size() - 1).getBankAccounts()
-											.getTypeBankAccounts().getMaximumLimit()) {
+									if (list2.size() >= list2.get(list2.size() - 1).getBankAccounts().getTypeBankAccounts().getMaximumLimit()) {
 
-										return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-												"Supero el Limite De movimientos Mensual"));
+										return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,Utils.superolimitsaldo));
 
 									} else {
 
-										Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount()
-												+ movementsBankAccounts.getAmount();
+										Double deposito = list1.get(list1.size() - 1).getAvailableBalanceAccount()+ movementsBankAccounts.getAmount();
 
-										list1.get(list1.size() - 1).setAvailableBalanceAccount(descuento);
+										list1.get(list1.size() - 1).setAvailableBalanceAccount(deposito);
 
-										BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(
-												list1, movementsBankAccounts.getBankAccounts());
+										BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1, movementsBankAccounts.getBankAccounts());
 
-										this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+										this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
-										movementsBankAccounts
-												.setMovementsBankAccountsCode(UUID.randomUUID().toString());
+										movementsBankAccounts.setMovementsBankAccountsCode(UUID.randomUUID().toString());
 
-										return this.movementsBankAccountsService
-												.createMovementsBankAccounts(movementsBankAccounts);
+										return this.movementsBankAccountsService.createMovementsBankAccounts(movementsBankAccounts);
 
 									}
 
@@ -665,43 +622,36 @@ public class MovementsBankAccountsController {
 
 								// Corriente
 
-								if (movementsBankAccounts.getAmount() > list1.get(list1.size() - 1)
-										.getAvailableBalanceAccount()) {
-
-									return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-											"Supero su saldo disponible"));
-
-								} else {
-
-									Double comision = movementsBankAccounts.getAmount()
+									Double depositodescunto = movementsBankAccounts.getAmount()
 											/ list1.get(list1.size() - 1).getTypeBankAccounts().getCommission();
 
-									log.info("Total Descuento " + comision);
+									log.info("Total Descuento " + depositodescunto);
+									
+									
+									Double depositototal = list1.get(list1.size() - 1).getAvailableBalanceAccount()
+											+ movementsBankAccounts.getAmount() - depositodescunto;
 
-									Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount()
-											+ movementsBankAccounts.getAmount() - comision;
-
-									list1.get(list1.size() - 1).setAvailableBalanceAccount(descuento);
+									list1.get(list1.size() - 1).setAvailableBalanceAccount(depositototal);
 
 									BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,
 											movementsBankAccounts.getBankAccounts());
 
-									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
 									movementsBankAccounts.setMovementsBankAccountsCode(UUID.randomUUID().toString());
 
-									return this.movementsBankAccountsService
-											.createMovementsBankAccounts(movementsBankAccounts);
-
-								}
-
+									// Seteo de amount enviado mas la comision calculada
+									movementsBankAccounts.setAmount(movementsBankAccounts.getAmount() - depositodescunto);
+									
+									return this.movementsBankAccountsService.createMovementsBankAccounts(movementsBankAccounts); 
+									
 							} else {
 
 								DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
 								String strDateEstimado = dateFormat
 										.format(list1.get(list1.size() - 1).getDateLastBankAccount());
 
-								log.info("Fecha estimanda para el retiro " + strDateEstimado);
+								log.info("Fecha estimanda para el depositar " + strDateEstimado);
 
 								String strDateActual = dateFormat.format(new Date());
 
@@ -709,15 +659,14 @@ public class MovementsBankAccountsController {
 
 								if (strDateEstimado.equals(strDateActual)) {
 
-									Double descuento = list1.get(list1.size() - 1).getAvailableBalanceAccount()
-											+ movementsBankAccounts.getAmount();
+									Double deposito = list1.get(list1.size() - 1).getAvailableBalanceAccount()+ movementsBankAccounts.getAmount();
 
-									list1.get(list1.size() - 1).setAvailableBalanceAccount(descuento);
+									list1.get(list1.size() - 1).setAvailableBalanceAccount(deposito);
 
 									BankAccounts updateBankAccounts = this.validationUpdateBankAccountsRequest(list1,
 											movementsBankAccounts.getBankAccounts());
 
-									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts);
+									this.bankAccountsService.createBankAccountsRepository(updateBankAccounts).subscribe();
 
 									movementsBankAccounts.setMovementsBankAccountsCode(UUID.randomUUID().toString());
 
@@ -726,7 +675,7 @@ public class MovementsBankAccountsController {
 
 								} else {
 									return Mono.error(new ResponseStatusException(HttpStatus.PRECONDITION_FAILED,
-											"Fecha no permitido, para retirar dinero."));
+											"Fecha no permitido, para depositar el dinero."));
 								}
 
 							}
@@ -753,7 +702,7 @@ public class MovementsBankAccountsController {
 
 	}
 
-	@GetMapping(value = "/MovementsBankAccountsbyCodeCustomer/{code_Customer}")
+	@GetMapping(value = "/MovementsBankAccountsbyCodeCustomer/{codeCustomer}")
 	public Mono<ResponseEntity<Flux<MovementsBankAccounts>>> getMovementsBankAccountsbyCodeCustomer(
 			@PathVariable String codeCustomer) {
 		Flux<MovementsBankAccounts> list = this.movementsBankAccountsService
@@ -791,6 +740,11 @@ public class MovementsBankAccountsController {
 		} else if (movementsBankAccounts.getDescription() == null || movementsBankAccounts.getDescription().equals("")) {
 			validator = false;
 		} else {
+			
+			if (movementsBankAccounts.getDateMovement() == null) {
+				movementsBankAccounts.setDateMovement(new Date());
+			}
+			
 			validator = true;
 		}
 
@@ -805,14 +759,12 @@ public class MovementsBankAccountsController {
 			codigoValidatorMovementsBankAccounts = list1.get(list1.size() - 1).getNumberAccount();
 
 			movementsBankAccounts.getBankAccounts().setId(list1.get(list1.size() - 1).getId());
-			movementsBankAccounts.getBankAccounts()
-					.setTypeBankAccounts(list1.get(list1.size() - 1).getTypeBankAccounts());
+			movementsBankAccounts.getBankAccounts().setTypeBankAccounts(list1.get(list1.size() - 1).getTypeBankAccounts());
 			movementsBankAccounts.getBankAccounts().setNumberAccount(codigoValidatorMovementsBankAccounts);
 			movementsBankAccounts.getBankAccounts().setKeyAccount(list1.get(list1.size() - 1).getKeyAccount());
-			movementsBankAccounts.getBankAccounts()
-					.setAvailableBalanceAccount(list1.get(list1.size() - 1).getAvailableBalanceAccount());
+			movementsBankAccounts.getBankAccounts().setAvailableBalanceAccount(list1.get(list1.size() - 1).getAvailableBalanceAccount());
 			movementsBankAccounts.getBankAccounts().setCustomer(list1.get(list1.size() - 1).getCustomer());
-
+			
 		}
 
 		return codigoValidatorMovementsBankAccounts;

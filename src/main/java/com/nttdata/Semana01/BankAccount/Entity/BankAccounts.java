@@ -6,17 +6,21 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.nttdata.Semana01.BankAccount.DTO.Customer;
+import com.nttdata.Semana01.BankAccount.response.CreditCardResponse;
+import com.nttdata.Semana01.BankAccount.response.CustomerResponse;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @AllArgsConstructor
+@NoArgsConstructor
 @Document
 @Data
 @Builder
 public class BankAccounts {
+	
 	
 	@Id
 	private String id;
@@ -41,7 +45,9 @@ public class BankAccounts {
 	// Estado 
 	private boolean statusAccount; 
 	
-	private Customer customer;
+	private CustomerResponse customer;
+	
+	private CreditCardResponse creditCard;
 	
 
 }

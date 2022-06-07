@@ -1,6 +1,7 @@
 package com.nttdata.Semana01.BankAccount.Entity;
 
 import java.util.Date;
+import java.util.List;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -30,6 +31,8 @@ public class DebitCard {
 	// Estado 
 	private boolean statusAccount; 
 	
-	private BankAccounts bankAccounts;
+	//private BankAccounts bankAccounts;
+	private List<BankAccounts> bankAccounts;
 	
+	private String dniCustomer;
 }

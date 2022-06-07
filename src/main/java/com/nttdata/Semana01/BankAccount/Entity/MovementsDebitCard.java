@@ -17,23 +17,20 @@ import lombok.NoArgsConstructor;
 @Document
 @Data
 @Builder
-public class MovementsBankAccounts {
-
+public class MovementsDebitCard {
+	
 	@Id
 	private String id;
-	
-	private String movementsBankAccountsCode;
-	
+	 
 	// Monto
 	private double amount;
 	 
 	@JsonFormat(pattern="dd-MM-yyyy" , timezone="GMT-05:00")
 	private Date dateMovement;
 		
-	private String description;
+	private String description;  
 	
-	private BankAccounts bankAccounts;
-	
-	private String numberAccountDestination; 
+	private DebitCard debitCard;
+	 
 }
 
